@@ -22,6 +22,7 @@ import weasyprint
 from bs4 import BeautifulSoup
 from config_loader import load_config
 from flask import Flask, request
+from i18n_utils import normalize_locale
 from weasyprint import CSS
 from weasyprint import HTML
 from telebot import types
@@ -98,13 +99,13 @@ def reject_unauthorized(chat_id, user_lang):
 
 @bot.message_handler(func=lambda message: not is_allowed_user(message.from_user.id), content_types=["text", "document", "photo", "audio", "video", "voice", "sticker", "location", "contact"])
 def blocked_by_allowlist_message(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     reject_unauthorized(message.chat.id, user_lang)
 
 
 @bot.callback_query_handler(func=lambda call: not is_allowed_user(call.from_user.id))
 def blocked_by_allowlist_callback(call):
-    user_lang = (call.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(call.from_user.language_code)
     try:
         bot.answer_callback_query(call.id, "Unauthorized user")
     except:
@@ -281,7 +282,7 @@ def set_buttons(lang='en-us'):
 
 @bot.message_handler(commands=["help"])
 def help(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     send_message(
         message.from_user.id,
         i18n.t("bot.help", locale=user_lang),
@@ -428,7 +429,7 @@ def cmd_lista(message):
 
 @bot.message_handler(commands=["tos", "privacy"])
 def tos(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     send_message(
         message.from_user.id,
         i18n.t("bot.tos", locale=user_lang),
@@ -438,7 +439,7 @@ def tos(message):
 
 #@bot.message_handler(commands=["donate", "pix"])
 def tos(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     bot.send_photo(
         message.from_user.id,
         i18n.t("bot.donate_image", locale=user_lang),
@@ -448,7 +449,7 @@ def tos(message):
 
 @bot.message_handler(commands=["info", "paysupport"])
 def info(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     send_message(
         message.from_user.id,
         i18n.t("bot.info", locale=user_lang),
@@ -463,7 +464,7 @@ def cmd_premium(message):
         bot.answer_callback_query(message.id)
     except:
         pass
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     terms_btn = types.InlineKeyboardMarkup()
     btn1 = types.InlineKeyboardButton(
         i18n.t("bot.terms_agree", locale=user_lang), callback_data="/agree"
@@ -497,7 +498,7 @@ def disagreed(call):
 
 @bot.callback_query_handler(lambda q: q.data == "/agree")
 def agreed(call):
-    user_lang = (call.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(call.from_user.language_code)
     is_premium = premium.check_premium_user(call.from_user.id)
     if not is_premium:
         bot.edit_message_text(
@@ -586,7 +587,7 @@ def got_payment(message):
 
 @bot.message_handler(commands=["start"])
 def start(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     print(user_lang)
     button, button2 = set_buttons(user_lang)
     set_menus(message.from_user.id, user_lang)
@@ -641,14 +642,14 @@ def start(message):
 
 @bot.message_handler(commands=["email"])
 def ask_email(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     msg = send_message(
         message.from_user.id, i18n.t("bot.askemail3", locale=user_lang)
     )
     bot.register_next_step_handler(msg, add_email)
 
 def add_email(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     button, button2 = set_buttons(user_lang)
 
     if message.content_type != "text":
@@ -719,13 +720,13 @@ def add_email(message):
 
 @bot.message_handler(commands=["send"])
 def ask_file_msg(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     send_message(
         message.from_user.id, i18n.t("bot.askfile", locale=user_lang)
     )
 
 def get_file(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
 
     if str(message.from_user.id) in BLOCKED:
         bot.delete_message(message.from_user.id, message.message_id)
@@ -836,7 +837,7 @@ def get_file(message):
         )
     else:
         data = select_user(db, table, message.from_user.id, "*")
-        lang = (message.from_user.language_code or "en-us").lower()
+        lang = normalize_locale(message.from_user.language_code)
         interval = (
             datetime.datetime.now()
             - datetime.datetime.strptime(
@@ -848,7 +849,7 @@ def get_file(message):
 
 @bot.callback_query_handler(lambda q: q.data == "/converted")
 def ask_conv(call):
-    user_lang = (call.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(call.from_user.language_code)
 
     r = redis.Redis(host='localhost', port=6379, db=0)
     file_name = r.get(call.from_user.id).decode('utf-8')
@@ -886,7 +887,7 @@ def ask_conv(call):
 
 #@bot.callback_query_handler(lambda q: q.data == "/donate")
 def callback_donate(call):
-    user_lang = (call.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(call.from_user.language_code)
     bot.send_photo(
         call.from_user.id,
         i18n.t("bot.donate_image", locale=user_lang),
@@ -900,7 +901,7 @@ def callback_donate(call):
 
 @bot.callback_query_handler(lambda q: q.data == "/as_is")
 def ask_not_conv(call):
-    user_lang = (call.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(call.from_user.language_code)
        
     r = redis.Redis(host='localhost', port=6379, db=0)
     file_name = r.get(call.from_user.id).decode('utf-8')
@@ -921,7 +922,7 @@ def ask_not_conv(call):
 
 @bot.callback_query_handler(lambda q: q.data == "/email")
 def email(call):
-    user_lang = (call.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(call.from_user.language_code)
 
     try:
         bot.answer_callback_query(call.id)
@@ -935,7 +936,7 @@ def email(call):
 
 @bot.callback_query_handler(lambda q: q.data == "/send")
 def ask_file_call(call):
-    user_lang = (call.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(call.from_user.language_code)
 
     try:
         bot.answer_callback_query(call.id)
@@ -948,7 +949,7 @@ def ask_file_call(call):
 
 @bot.message_handler(func=lambda m: True)
 def generic_msg(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
 
     if (
         "@" not in message.text or "/" in message.text
@@ -966,7 +967,7 @@ def generic_msg(message):
 
 @bot.message_handler(content_types=["document"])
 def generic_file(message):
-    user_lang = (message.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(message.from_user.language_code)
     set_menus(message.from_user.id, user_lang)
 
     try:
@@ -986,7 +987,7 @@ def value_picked(call):
         bot.answer_callback_query(call.id)
     except:
         pass
-    user_lang = (call.from_user.language_code or "en-us").lower()
+    user_lang = normalize_locale(call.from_user.language_code)
     is_premium = premium.check_premium_user(call.from_user.id)
     value = int(call.data)
     bot.send_invoice(

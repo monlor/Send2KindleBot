@@ -4,3 +4,5 @@
 *.conf
 *.zip
 files/*
+__pycache__/
+*.py[cod]

@@ -11,6 +11,7 @@ import urllib.request
 import premiumfunctions as premium
 from config_loader import load_config
 from ebooklib import epub
+from i18n_utils import normalize_locale
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -140,6 +141,7 @@ def resolve_sender_address(data, saldo):
 
 
 def deliver_message(data):
+    data["lang"] = normalize_locale(data.get("lang"))
     msg = MIMEMultipart()
 
     try:
