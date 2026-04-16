@@ -9,5 +9,6 @@ redis==5.0.4
 requests==2.32.3
 weasyprint==56.1
 python-i18n==0.3.9
+PyYAML==6.0.3
 dnspython==2.6.1
 pyTelegramBotAPI==4.19.1
