@@ -28,7 +28,7 @@ from weasyprint import HTML
 from telebot import types
 from validate_email import validate_email
 
-i18n.load_path.append("i18n")
+i18n.load_path.append("locales")
 i18n.set("fallback", "en-us")
 
 config = load_config()

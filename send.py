@@ -19,6 +19,9 @@ from email.mime.text import MIMEText
 from email.utils import formatdate
 from telebot import types
 
+i18n.load_path.append("locales")
+i18n.set("fallback", "en-us")
+
 config = load_config()
 TOKEN = config["DEFAULT"]["TOKEN"]
 SMTP_HOST = config["DEFAULT"]["SMTP_HOST"]
