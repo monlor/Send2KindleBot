@@ -1,5 +1,4 @@
 import anuncieaqui
-import configparser
 import datetime
 import dns.resolver
 import epub_meta
@@ -7,19 +6,21 @@ import json
 import logging
 import logging.handlers
 import os
-import pika
 import redis
 import requests
 import sqlite3
 import subprocess
+import threading
 import time
 import urllib.request
 import premiumfunctions as premium
+import send as sender
 
 import i18n
 import telebot
 import weasyprint
 from bs4 import BeautifulSoup
+from config_loader import load_config
 from flask import Flask, request
 from weasyprint import CSS
 from weasyprint import HTML
@@ -29,30 +30,24 @@ from validate_email import validate_email
 i18n.load_path.append("i18n")
 i18n.set("fallback", "en-us")
 
-config = configparser.ConfigParser()
-config.sections()
-BOT_CONFIG_FILE = "kindle.conf"
-config.read(BOT_CONFIG_FILE)
+config = load_config()
 log_file = config["DEFAULT"]["logfile"]
 TOKEN = config["DEFAULT"]["TOKEN"]
 CERT = config["DEFAULT"]["CERT"]
 PRIVKEY = config["DEFAULT"]["PRIVKEY"]
 BLOCKED = config["DEFAULT"]["BLOCKED"]
+ALLOWED_USER_IDS = config["DEFAULT"]["ALLOWED_USER_IDS"]
 MULTIPLIER = int(config["DEFAULT"]["MULTIPLIER"])
 DEMO = int(config["DEFAULT"]["DEMO"])
 ADMIN = int(config["DEFAULT"]["ADMIN"])
+BOT_MODE = config["DEFAULT"]["BOT_MODE"].lower()
+WEBHOOK_HOST = config["DEFAULT"]["WEBHOOK_HOST"]
+WEBHOOK_PORT = int(config["DEFAULT"]["WEBHOOK_PORT"])
 db = config["SQLITE3"]["data_base"]
 table = config["SQLITE3"]["table"]
-rabbitmqcon = config["RABBITMQ"]["CONNECTION_STRING"]
 
 bot = telebot.TeleBot(TOKEN)
 server = Flask(__name__)
-
-rabbitmq_con = pika.BlockingConnection(pika.URLParameters(rabbitmqcon))
-#rabbitmq_con = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-rabbit = rabbitmq_con.channel()
-rabbit.queue_declare(queue='Send2KindleBotFast', durable=True)
-rabbit.queue_declare(queue='Send2KindleBotSlow', durable=True)
 
 cmds = ["/start", "/send", "/info", "/help", "/email", "/donate", "/stars"]
 LOG_INFO_FILE = log_file
@@ -67,36 +62,76 @@ handler_info = logging.handlers.TimedRotatingFileHandler(
 )
 logger_info.addHandler(handler_info)
 
+
+def parse_user_ids(raw_value):
+    user_ids = set()
+    for value in raw_value.split(","):
+        value = value.strip()
+        if not value:
+            continue
+        try:
+            user_ids.add(int(value))
+        except ValueError:
+            continue
+    return user_ids
+
+
+ALLOWED_USERS = parse_user_ids(ALLOWED_USER_IDS)
+if ADMIN:
+    ALLOWED_USERS.add(ADMIN)
+
+
+def is_allowed_user(user_id):
+    if not ALLOWED_USERS:
+        return True
+    return int(user_id) in ALLOWED_USERS
+
+
+def reject_unauthorized(chat_id, user_lang):
+    send_message(
+        chat_id,
+        i18n.t("bot.info", locale=user_lang),
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+    )
+
+
+@bot.message_handler(func=lambda message: not is_allowed_user(message.from_user.id), content_types=["text", "document", "photo", "audio", "video", "voice", "sticker", "location", "contact"])
+def blocked_by_allowlist_message(message):
+    user_lang = (message.from_user.language_code or "en-us").lower()
+    reject_unauthorized(message.chat.id, user_lang)
+
+
+@bot.callback_query_handler(func=lambda call: not is_allowed_user(call.from_user.id))
+def blocked_by_allowlist_callback(call):
+    user_lang = (call.from_user.language_code or "en-us").lower()
+    try:
+        bot.answer_callback_query(call.id, "Unauthorized user")
+    except:
+        pass
+    reject_unauthorized(call.from_user.id, user_lang)
+
 def send_mail(data, subject, lang, file_name):
     msg_sent = send_message(
         data[1], str(u"\U0001F5DE") + i18n.t("bot.sendingfile",
         locale=lang), parse_mode="HTML",
     )
-    rabbitmq_con = pika.BlockingConnection(pika.URLParameters(rabbitmqcon))
-    #rabbitmq_con = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-    rabbit = rabbitmq_con.channel()
-    if (
-        ".mobi" in data[7]
-        or ".cbr" in data[7]
-        or ".cbz" in data[7]
-        or ".azw3" in data[7]
-    ):
-        queue = 'Send2KindleBotSlow'
-    else:
-        queue = 'Send2KindleBotFast'
     file_name = file_name.replace('\n', '')
-    msg = (f'{{"from":"{data[2]}", "to":"{data[3]}", "subject":"{subject}", ' 
-        f'"user_id":"{data[1]}", "file_url":"{data[7]}", "lang":"{lang}", '
-        f'"message_id":"{msg_sent.message_id}", "file_name":"{file_name}"}}')
-    rabbit.basic_publish(
-        exchange='',
-        routing_key=queue,
-        body=msg,
-        properties=pika.BasicProperties(
-            delivery_mode = pika.spec.PERSISTENT_DELIVERY_MODE
-        )
-    )
-    rabbitmq_con.close()
+    payload = {
+        "from": data[2],
+        "to": data[3],
+        "subject": subject,
+        "user_id": data[1],
+        "file_url": data[7],
+        "lang": lang,
+        "message_id": msg_sent.message_id,
+        "file_name": file_name,
+    }
+    threading.Thread(
+        target=sender.deliver_message,
+        args=(payload,),
+        daemon=True,
+    ).start()
     upd_user_last(db, table, data[1])
 
 def check_domain(email):
@@ -978,5 +1013,18 @@ def getMessage():
     return "!", 200
 
 if __name__ == "__main__":
-    # bot.infinity_polling()
-    server.run(host="0.0.0.0", port=443, ssl_context=(f'{CERT}', f'{PRIVKEY}'))
+    if BOT_MODE == "webhook":
+        if not WEBHOOK_HOST or not CERT or not PRIVKEY:
+            raise ValueError(
+                "Webhook mode requires BOT_WEBHOOK_HOST, BOT_CERT and BOT_PRIVKEY."
+            )
+        bot.remove_webhook()
+        bot.set_webhook(url=f"{WEBHOOK_HOST.rstrip('/')}/{TOKEN}")
+        server.run(
+            host="0.0.0.0",
+            port=WEBHOOK_PORT,
+            ssl_context=(CERT, PRIVKEY),
+        )
+    else:
+        bot.remove_webhook()
+        bot.infinity_polling(skip_pending=True)

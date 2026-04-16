@@ -1,19 +1,26 @@
 [DEFAULT]
 TOKEN =
 CERT =
-PRIVKEY 
-logfile = /var/log/Send2KindleBot/bot.log
+PRIVKEY =
+logfile = /app/data/logs/bot.log
 MULTIPLIER=2
 DEMO=3
 ADMIN=9083329
 BLOCKED =
+ALLOWED_USER_IDS =
+BOT_MODE = polling
+WEBHOOK_HOST =
+WEBHOOK_PORT = 443
+SMTP_HOST = smtp.example.com
+SMTP_PORT = 587
+SMTP_USERNAME =
+SMTP_PASSWORD =
+SMTP_FROM =
+SMTP_USE_TLS = 1
 
 [SQLITE3]
-data_base =
+data_base = /app/data/db/Send2KindleBot.db
 table = usuarios
-
-[RABBITMQ]
-CONNECTION_STRING =
 
 [TELEGRAM]
 DESTINATION =

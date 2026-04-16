@@ -1,13 +1,10 @@
-import configparser
 import telebot
 import time
 import subprocess
 import sys
+from config_loader import load_config
 
-config = configparser.ConfigParser()
-config.sections()
-BOT_CONFIG_FILE = "kindle.conf"
-config.read(BOT_CONFIG_FILE)
+config = load_config()
 TOKEN = config["DEFAULT"]["TOKEN"]
 
 bot = telebot.TeleBot(TOKEN)

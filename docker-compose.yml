@@ -1,11 +1,20 @@
-version: '3'
 services:
-  rabbitmq:
-    image: rabbitmq:3.10-management
-    container_name: rabbitmq
-    ports:
-      - 5672:5672
-      # - 15672:15672
+  bot:
+    build: .
+    image: send2kindlebot:local
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      BOT_ADMIN: ${BOT_ADMIN}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-1}
+    command: python bot.py
+    restart: unless-stopped
     volumes:
-      - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/
-    restart: always
+      - send2kindlebot_data:/app/data
+
+volumes:
+  send2kindlebot_data:

@@ -1,20 +1,15 @@
 import anuncieaqui
-import configparser
 import dns.resolver
 import ebooklib
 import i18n
-import pika
-import json
 import os
 import random
-import signal
 import smtplib
 import subprocess
-import sqlite3
-import sys
 import telebot
 import urllib.request
 import premiumfunctions as premium
+from config_loader import load_config
 from ebooklib import epub
 from email import encoders
 from email.mime.base import MIMEBase
@@ -23,12 +18,15 @@ from email.mime.text import MIMEText
 from email.utils import formatdate
 from telebot import types
 
-BOT_CONFIG_FILE = "kindle.conf"
-config = configparser.ConfigParser()
-config.sections()
-config.read(BOT_CONFIG_FILE)
+config = load_config()
 TOKEN = config["DEFAULT"]["TOKEN"]
-rabbitmqcon = config["RABBITMQ"]["CONNECTION_STRING"]
+SMTP_HOST = config["DEFAULT"]["SMTP_HOST"]
+SMTP_PORT = int(config["DEFAULT"]["SMTP_PORT"])
+SMTP_USERNAME = config["DEFAULT"]["SMTP_USERNAME"]
+SMTP_PASSWORD = config["DEFAULT"]["SMTP_PASSWORD"]
+SMTP_FROM = config["DEFAULT"]["SMTP_FROM"]
+SMTP_USE_TLS = config["DEFAULT"]["SMTP_USE_TLS"].lower() in ("1", "true", "yes", "on")
+bot = telebot.TeleBot(TOKEN)
 
 effects = [
     5107584321108051014,
@@ -133,9 +131,15 @@ def check_domain(email):
             continue
     return False
 
-def send_file(rbt, method, properties, data):
-    rbt.basic_ack(delivery_tag=method.delivery_tag)
-    data = json.loads(data)
+def resolve_sender_address(data, saldo):
+    if SMTP_FROM:
+        return SMTP_FROM
+    if saldo > 0:
+        return f'{data["user_id"]}@send.grf.xyz'
+    return f'{data["from"]}'
+
+
+def deliver_message(data):
     msg = MIMEMultipart()
 
     try:
@@ -150,19 +154,18 @@ def send_file(rbt, method, properties, data):
     else:
         saldo = 0
 
-    if saldo > 0:
-        msg["From"] = f'{data["user_id"]}@send.grf.xyz'
-    else:
-        msg["From"] = f"{data['from']}"
-
+    sender_address = resolve_sender_address(data, saldo)
+    msg["From"] = sender_address
     msg["To"] = f"{data['to']}"
     msg["Date"] = formatdate(localtime=True)
     msg["Subject"] = f"{data['subject']}"
+    if SMTP_FROM and data["from"]:
+        msg["Reply-To"] = f"{data['from']}"
     text = f"Send2KindleBot - Document sent from Telegram user {data['user_id']}"
 
     msg.attach(MIMEText(text.format(data['user_id'])))
 
-    if not check_domain(data['to']) or not check_domain(data['from']):
+    if not check_domain(data['to']) or not check_domain(sender_address):
         send_message(
             data['user_id'],
             i18n.t("bot.checkemail", locale=data['lang']),
@@ -187,9 +190,13 @@ def send_file(rbt, method, properties, data):
         'attachment; filename="{0}"'.format(os.path.basename(files)),
     )
     msg.attach(part)
-    smtp = smtplib.SMTP("127.0.0.1")
+    smtp = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
     try:
-        smtp.sendmail(msg['From'], msg['To'], msg.as_string())
+        if SMTP_USE_TLS:
+            smtp.starttls()
+        if SMTP_USERNAME and SMTP_PASSWORD:
+            smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+        smtp.sendmail(sender_address, msg['To'], msg.as_string())
     except smtplib.SMTPSenderRefused:
         msg = send_message(
             data['user_id'],
@@ -243,17 +250,10 @@ def send_file(rbt, method, properties, data):
             reply_markup=button,
             disable_web_page_preview=True,
             message_effect_id=random.choice(effects)
-        )
+    )
     if saldo:
         premium.update_saldo_premium(data['user_id'], saldo-1)
 
+
 if __name__ == "__main__":
-    i18n.load_path.append("i18n")
-    i18n.set("fallback", "en-us")
-    bot = telebot.TeleBot(TOKEN)
-    rabbitmq_con = pika.BlockingConnection(pika.URLParameters(rabbitmqcon))
-    #rabbitmq_con = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-    rabbit = rabbitmq_con.channel()
-    rabbit.basic_qos(prefetch_count=1)
-    rabbit.basic_consume(queue=sys.argv[1], on_message_callback=send_file)
-    rabbit.start_consuming()
+    raise SystemExit("send.py is now a helper module and is not meant to run standalone.")

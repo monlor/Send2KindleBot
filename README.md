@@ -67,10 +67,59 @@ cp kindle.conf_sample kindle.conf
 
 `table` = Table's name.
 
+## Docker
+
+The project supports Docker-based startup using environment variables.
+
+1. Set the required environment variables:
+
+```env
+BOT_TOKEN=your-telegram-bot-token
+BOT_ADMIN=12345678
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=bot@example.com
+SMTP_PASSWORD=your-password
+SMTP_FROM=bot@example.com
+SMTP_USE_TLS=1
+```
+
+2. Start the stack.
+
+```bash
+docker compose up -d --build
+```
+
+This starts a single bot container. Persistent data is stored in Docker volumes.
+
+`SMTP_FROM` is the actual sender address used by the SMTP relay. This is useful when your SMTP provider requires a verified sender address instead of the user-provided e-mail.
+
+`BOT_MODE` defaults to `polling`, so you do not need to set it for the normal Docker setup.
+
+`BOT_ALLOWED_USER_IDS` is optional. When set, only the listed Telegram user IDs can use the bot. `BOT_ADMIN` is automatically allowed.
+
+### Webhook mode
+
+If you prefer Telegram webhook mode, set:
+
+```env
+BOT_MODE=webhook
+BOT_WEBHOOK_HOST=https://your-domain.example
+BOT_CERT=/app/certs/fullchain.pem
+BOT_PRIVKEY=/app/certs/privkey.pem
+```
+
+Then add a certificate mount to `docker-compose.yml`:
+
+```yaml
+volumes:
+  - ./certs:/app/certs:ro
+```
+
 # Run it
 
-```
-python3 pdftokindlebot.py
+```bash
+python3 bot.py
 ```
 
 # Contribute

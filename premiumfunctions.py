@@ -1,10 +1,7 @@
-import configparser
 import sqlite3
+from config_loader import load_config
 
-config = configparser.ConfigParser()
-config.sections()
-BOT_CONFIG_FILE = "kindle.conf"
-config.read(BOT_CONFIG_FILE)
+config = load_config()
 db = config["SQLITE3"]["data_base"]
 
 def check_premium_user(userid):

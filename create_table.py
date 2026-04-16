@@ -1,14 +1,11 @@
-import configparser
 import datetime
 import logging
 import logging.handlers
 import sqlite3
+from config_loader import load_config
 
 if __name__ == "__main__":
-    config = configparser.ConfigParser()
-    config.sections()
-    BOT_CONFIG_FILE = "kindle.conf"
-    config.read(BOT_CONFIG_FILE)
+    config = load_config()
     log_file = config["DEFAULT"]["logfile"]
     db = config["SQLITE3"]["data_base"]
     table = config["SQLITE3"]["table"]
